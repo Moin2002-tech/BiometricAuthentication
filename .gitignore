@@ -11,22 +11,28 @@
 *.gch
 *.pch
 
+<<<<<<< HEAD
 # Linker files
 *.ilk
 
 # Debugger Files
 *.pdb
 
+=======
+>>>>>>> 732f8c5 (Update gitignore and project files)
 # Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
+<<<<<<< HEAD
 *.so.*
 
 
 # Fortran module files
 *.mod
 *.smod
+=======
+>>>>>>> 732f8c5 (Update gitignore and project files)
 
 # Compiled Static libraries
 *.lai
@@ -39,6 +45,7 @@
 *.out
 *.app
 
+<<<<<<< HEAD
 # Build directories
 build/
 Build/
@@ -67,3 +74,31 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+=======
+# IDE - CLion / JetBrains
+.idea/
+cmake-build-debug/
+cmake-build-release/
+
+# External libraries - ignore libtorch (large binary distribution)
+external/libtorch/
+
+# Large model files
+*.pth
+*.pt
+*.onnx
+*.caffemodel
+
+# Databases (if they contain local data)
+*.db
+*.sqlite
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+>>>>>>> 732f8c5 (Update gitignore and project files)
