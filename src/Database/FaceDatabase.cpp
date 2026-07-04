@@ -36,50 +36,142 @@ namespace Database {
         FaceRecord record;
         record.id = nextId_++;
         record.name = name;
-        record.embedding = embedding;
 
-        // Save the face photo to disk
-        std::string photoFilename = getPhotosDir() + "/person_" + std::to_string(record.id) + ".jpg";
+        // Add first embedding + photo
+        record.embeddings.push_back(embedding);
+        std::string photoFilename = getPhotosDir() + "/person_" + std::to_string(record.id)
+                                     + "_angle_0.jpg";
         cv::imwrite(photoFilename, facePhoto);
-        record.photoPath = photoFilename;
+        record.photoPaths.push_back(photoFilename);
 
         records_.push_back(record);
         save();
 
-        std::cout << "[Database] Added person '" << name << "' with ID " << record.id << std::endl;
+        std::cout << "[Database] Added person '" << name << "' with ID " << record.id
+                  << " (1 face angle)" << std::endl;
         return record.id;
+    }
+
+    int FaceDatabase::addPerson(int id,
+                                 const std::string& name,
+                                 const std::vector<float>& embedding,
+                                 const cv::Mat& facePhoto)
+    {
+        if (hasId(id))
+        {
+            std::cerr << "[Database] Cannot add person: ID " << id << " already exists." << std::endl;
+            return -1;
+        }
+
+        FaceRecord record;
+        record.id = id;
+        record.name = name;
+
+        // Add first embedding + photo
+        record.embeddings.push_back(embedding);
+        std::string photoFilename = getPhotosDir() + "/person_" + std::to_string(record.id)
+                                     + "_angle_0.jpg";
+        cv::imwrite(photoFilename, facePhoto);
+        record.photoPaths.push_back(photoFilename);
+
+        records_.push_back(record);
+
+        // Update nextId_ to be greater than any existing ID
+        if (id >= nextId_)
+            nextId_ = id + 1;
+
+        save();
+
+        std::cout << "[Database] Added person '" << name << "' with manual ID " << record.id
+                  << " (1 face angle)" << std::endl;
+        return record.id;
+    }
+
+    bool FaceDatabase::addFaceToPerson(int id,
+                                        const std::vector<float>& embedding,
+                                        const cv::Mat& facePhoto)
+    {
+        for (auto& rec : records_)
+        {
+            if (rec.id == id)
+            {
+                int angleIndex = static_cast<int>(rec.embeddings.size());
+                rec.embeddings.push_back(embedding);
+
+                std::string photoFilename = getPhotosDir() + "/person_" + std::to_string(rec.id)
+                                             + "_angle_" + std::to_string(angleIndex) + ".jpg";
+                cv::imwrite(photoFilename, facePhoto);
+                rec.photoPaths.push_back(photoFilename);
+
+                save();
+
+                std::cout << "[Database] Added face angle " << angleIndex
+                          << " to person '" << rec.name << "' (ID=" << rec.id << ")" << std::endl;
+                return true;
+            }
+        }
+
+        std::cerr << "[Database] Cannot add face: person ID " << id << " not found." << std::endl;
+        return false;
+    }
+
+    bool FaceDatabase::hasId(int id) const
+    {
+        for (const auto& rec : records_)
+        {
+            if (rec.id == id)
+                return true;
+        }
+        return false;
     }
 
     int FaceDatabase::findMatch(const std::vector<float>& embedding,
                                  float threshold) const
     {
+        float dummyScore;
+        return findMatchWithScore(embedding, dummyScore, threshold);
+    }
+
+    int FaceDatabase::findMatchWithScore(const std::vector<float>& embedding,
+                                          float& bestScore,
+                                          float threshold) const
+    {
+        bestScore = -1.0f;
         if (records_.empty())
         {
             return -1;
         }
 
-        float bestSimilarity = -1.0f;
-        int bestIndex = -1;
+        int bestPersonIndex = -1;
+        int bestAngleIndex = -1;
 
-        for (int i = 0; i < static_cast<int>(records_.size()); ++i)
+        for (int personIdx = 0; personIdx < static_cast<int>(records_.size()); ++personIdx)
         {
-            float sim = cosineSimilarity(embedding, records_[i].embedding);
-            if (sim > bestSimilarity)
+            const auto& rec = records_[personIdx];
+
+            // Compare against ALL embeddings for this person
+            for (int angleIdx = 0; angleIdx < static_cast<int>(rec.embeddings.size()); ++angleIdx)
             {
-                bestSimilarity = sim;
-                bestIndex = i;
+                float sim = cosineSimilarity(embedding, rec.embeddings[angleIdx]);
+                if (sim > bestScore)
+                {
+                    bestScore = sim;
+                    bestPersonIndex = personIdx;
+                    bestAngleIndex = angleIdx;
+                }
             }
         }
 
-        if (bestSimilarity >= threshold)
+        if (bestScore >= threshold)
         {
-            std::cout << "[Database] Match found: '" << records_[bestIndex].name
-                      << "' (ID=" << records_[bestIndex].id
-                      << ", similarity=" << bestSimilarity << ")" << std::endl;
-            return bestIndex;
+            std::cout << "[Database] Match found: '" << records_[bestPersonIndex].name
+                      << "' (ID=" << records_[bestPersonIndex].id
+                      << ", angleId=" << bestAngleIndex
+                      << ", similarity=" << bestScore << ")" << std::endl;
+            return bestPersonIndex;
         }
 
-        std::cout << "[Database] No match above threshold (best=" << bestSimilarity
+        std::cout << "[Database] No match above threshold (best=" << bestScore
                   << " < threshold=" << threshold << ")" << std::endl;
         return -1;
     }
@@ -102,6 +194,16 @@ namespace Database {
     const FaceRecord& FaceDatabase::getRecord(int index) const
     {
         return records_[index];
+    }
+
+    int FaceDatabase::totalFaces() const
+    {
+        int count = 0;
+        for (const auto& rec : records_)
+        {
+            count += static_cast<int>(rec.embeddings.size());
+        }
+        return count;
     }
 
     std::string FaceDatabase::getName(int index) const
@@ -141,6 +243,45 @@ namespace Database {
         std::cout << "[Database] Database has been reset. All records deleted." << std::endl;
     }
 
+    // ---- Serialization helpers ----
+
+    template<typename Stream>
+    static void writeString(Stream& s, const std::string& str)
+    {
+        uint32_t len = static_cast<uint32_t>(str.size());
+        s.write(reinterpret_cast<const char*>(&len), sizeof(len));
+        s.write(str.data(), len);
+    }
+
+    template<typename Stream>
+    static std::string readString(Stream& s)
+    {
+        uint32_t len;
+        s.read(reinterpret_cast<char*>(&len), sizeof(len));
+        std::string str;
+        str.resize(len);
+        s.read(str.data(), len);
+        return str;
+    }
+
+    template<typename Stream>
+    static void writeEmbedding(Stream& s, const std::vector<float>& emb)
+    {
+        uint32_t embSize = static_cast<uint32_t>(emb.size());
+        s.write(reinterpret_cast<const char*>(&embSize), sizeof(embSize));
+        s.write(reinterpret_cast<const char*>(emb.data()), embSize * sizeof(float));
+    }
+
+    template<typename Stream>
+    static std::vector<float> readEmbedding(Stream& s)
+    {
+        uint32_t embSize;
+        s.read(reinterpret_cast<char*>(&embSize), sizeof(embSize));
+        std::vector<float> emb(embSize);
+        s.read(reinterpret_cast<char*>(emb.data()), embSize * sizeof(float));
+        return emb;
+    }
+
     void FaceDatabase::save()
     {
         std::ofstream ofs(DB_FILE, std::ios::binary);
@@ -161,24 +302,27 @@ namespace Database {
             // ID
             ofs.write(reinterpret_cast<const char*>(&rec.id), sizeof(rec.id));
 
-            // Name length + name
-            uint32_t nameLen = static_cast<uint32_t>(rec.name.size());
-            ofs.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
-            ofs.write(rec.name.data(), nameLen);
+            // Name
+            writeString(ofs, rec.name);
 
-            // Embedding
-            uint32_t embSize = static_cast<uint32_t>(rec.embedding.size());
-            ofs.write(reinterpret_cast<const char*>(&embSize), sizeof(embSize));
-            ofs.write(reinterpret_cast<const char*>(rec.embedding.data()),
-                      embSize * sizeof(float));
+            // Number of face angles
+            uint32_t numAngles = static_cast<uint32_t>(rec.embeddings.size());
+            ofs.write(reinterpret_cast<const char*>(&numAngles), sizeof(numAngles));
 
-            // Photo path length + path
-            uint32_t pathLen = static_cast<uint32_t>(rec.photoPath.size());
-            ofs.write(reinterpret_cast<const char*>(&pathLen), sizeof(pathLen));
-            ofs.write(rec.photoPath.data(), pathLen);
+            // For each angle: embedding + photo path
+            for (uint32_t a = 0; a < numAngles; ++a)
+            {
+                writeEmbedding(ofs, rec.embeddings[a]);
+
+                if (a < rec.photoPaths.size())
+                    writeString(ofs, rec.photoPaths[a]);
+                else
+                    writeString(ofs, "");  // fallback empty path
+            }
         }
 
-        std::cout << "[Database] Saved " << numRecords << " records to " << DB_FILE << std::endl;
+        std::cout << "[Database] Saved " << numRecords << " persons, "
+                  << totalFaces() << " total faces to " << DB_FILE << std::endl;
     }
 
     void FaceDatabase::load()
@@ -198,9 +342,9 @@ namespace Database {
             return;
         }
         ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
-        if (version != VERSION)
+        if (version > VERSION)
         {
-            std::cerr << "[Database] Unsupported database version." << std::endl;
+            std::cerr << "[Database] Unsupported database version: " << version << std::endl;
             return;
         }
         ifs.read(reinterpret_cast<char*>(&numRecords), sizeof(numRecords));
@@ -217,30 +361,46 @@ namespace Database {
             ifs.read(reinterpret_cast<char*>(&rec.id), sizeof(rec.id));
             if (rec.id > maxId) maxId = rec.id;
 
-            // Name
-            uint32_t nameLen;
-            ifs.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
-            rec.name.resize(nameLen);
-            ifs.read(rec.name.data(), nameLen);
+            if (version == 1)
+            {
+                // --- v1 format: single embedding + single photo path ---
+                // Name
+                rec.name = readString(ifs);
 
-            // Embedding
-            uint32_t embSize;
-            ifs.read(reinterpret_cast<char*>(&embSize), sizeof(embSize));
-            rec.embedding.resize(embSize);
-            ifs.read(reinterpret_cast<char*>(rec.embedding.data()),
-                     embSize * sizeof(float));
+                // Single embedding
+                std::vector<float> emb = readEmbedding(ifs);
+                rec.embeddings.push_back(emb);
 
-            // Photo path
-            uint32_t pathLen;
-            ifs.read(reinterpret_cast<char*>(&pathLen), sizeof(pathLen));
-            rec.photoPath.resize(pathLen);
-            ifs.read(rec.photoPath.data(), pathLen);
+                // Single photo path
+                std::string path = readString(ifs);
+                rec.photoPaths.push_back(path);
 
-            records_.push_back(rec);
+                records_.push_back(rec);
+            }
+            else
+            {
+                // --- v2+ format: name, numAngles, then angle data ---
+                rec.name = readString(ifs);
+
+                uint32_t numAngles;
+                ifs.read(reinterpret_cast<char*>(&numAngles), sizeof(numAngles));
+
+                for (uint32_t a = 0; a < numAngles; ++a)
+                {
+                    std::vector<float> emb = readEmbedding(ifs);
+                    rec.embeddings.push_back(emb);
+
+                    std::string path = readString(ifs);
+                    rec.photoPaths.push_back(path);
+                }
+
+                records_.push_back(rec);
+            }
         }
 
         nextId_ = maxId + 1;
-        std::cout << "[Database] Loaded " << numRecords << " records from " << DB_FILE << std::endl;
+        std::cout << "[Database] Loaded " << numRecords << " persons, "
+                  << totalFaces() << " total faces from " << DB_FILE << std::endl;
     }
 
 } // namespace Database

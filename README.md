@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# BiometricAuthentication
-=======
 # BiometricAuthentication
 
 A C++ biometric authentication system for face recognition using deep learning models.
@@ -115,7 +112,19 @@ BiometricAuthentication/
 - LibTorch / PyTorch C++ API (optional, for PyTorch model loading)
 - C++17 compatible compiler
 
-## License
+## Features
 
-This project uses the ArcFace ResNet50 model. Please refer to the original [ArcFace paper](https://arxiv.org/abs/1801.07698) and [Kaggle dataset license](https://www.kaggle.com/datasets/peopeng/arcface-r50-public) for usage terms.
->>>>>>> 732f8c5 (Update gitignore and project files)
+- Real-time multi-face detection and recognition
+- Per-face bounding box overlays with recognized names
+- Face alignment for better side-angle recognition
+- Multi-angle face registration: register the same person from multiple angles
+- Manual ID + name entry for fine-grained authorization control
+- Face selection with arrow keys for adding persons from crowded scenes
+- Persistent SQLite-style binary database with photo storage
+
+## New in this version
+
+- **Multi-face recognition**: All faces in frame are recognized independently
+- **Multi-angle person registration**: Press 'a' for new person, 'b' to add extra face angles
+- **Face alignment**: Eye-detection based rotation normalization improves side-face recognition
+- **Manual ID control**: Specify numeric IDs for each person during registration

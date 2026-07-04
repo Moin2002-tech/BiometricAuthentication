@@ -10,6 +10,7 @@
 #include <torch/script.h>
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
+#include <opencv2/objdetect.hpp>
 #include <vector>
 #include <string>
 
@@ -70,6 +71,18 @@ namespace Recognition {
         std::vector<float> detectAndEmbed(const cv::Mat& frame,
                                            cv::Rect& faceRect);
 
+        /**
+         * @brief Detect ALL faces in the frame and return embeddings for each.
+         * @param frame  Full BGR frame.
+         * @param faceRects [out] Bounding boxes of ALL detected faces.
+         * @param embeddings [out] 512-dim embeddings for each detected face.
+         * @param minConfidence  Minimum detection confidence.
+         */
+        void detectAndEmbedAll(const cv::Mat& frame,
+                               std::vector<cv::Rect>& faceRects,
+                               std::vector<std::vector<float>>& embeddings,
+                               float minConfidence = 0.5f);
+
     private:
         // Face detection model (OpenCV DNN / Caffe)
         cv::dnn::Net faceDetector_;
@@ -88,8 +101,20 @@ namespace Recognition {
         torch::Device device_;
         bool useGpu_;
 
+        // Face alignment: eye cascade for rotation normalization
+        cv::CascadeClassifier eyeCascade_;
+        static constexpr const char* EYE_CASCADE_PATH = "/usr/share/opencv4/haarcascades/haarcascade_eye.xml";
+
         // Preprocessing helpers
         cv::Mat preprocessForDetection(const cv::Mat& frame) const;
+
+        /**
+         * @brief Align a face crop to a canonical frontal orientation using eye detection.
+         * @param faceImg  Input face crop (BGR).
+         * @return Aligned face crop, or original if alignment fails.
+         */
+        cv::Mat alignFace(const cv::Mat& faceImg);
+
         torch::Tensor preprocessForRecognition(const cv::Mat& faceImg) const;
     };
 

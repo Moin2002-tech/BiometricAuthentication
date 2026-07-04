@@ -5,7 +5,10 @@
 #include "Recognition/modelsHandler.hpp"
 #include<torch/torch.h>
 #include <iostream>
+#include <algorithm>
+#include <cmath>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/objdetect.hpp>
 
 namespace Recognition {
 
@@ -50,7 +53,15 @@ namespace Recognition {
                                      std::string(TORCHSCRIPT_PATH) + " - " + e.what());
         }
 
-        std::cout << "[ModelsHandler] Both models loaded successfully." << std::endl;
+        // 3. Load eye cascade for face alignment
+        std::cout << "[ModelsHandler] Loading eye cascade for face alignment..." << std::endl;
+        if (!eyeCascade_.load(EYE_CASCADE_PATH))
+        {
+            std::cerr << "[ModelsHandler] Warning: Could not load eye cascade from "
+                      << EYE_CASCADE_PATH << ". Face alignment disabled." << std::endl;
+        }
+
+        std::cout << "[ModelsHandler] All models loaded successfully." << std::endl;
         std::cout << "[ModelsHandler] Recognition device: " << (useGpu_ ? "GPU (CUDA)" : "CPU") << std::endl;
     }
 
@@ -138,9 +149,61 @@ namespace Recognition {
         return faces;
     }
 
+    cv::Mat ModelsHandler::alignFace(const cv::Mat& faceImg)
+    {
+        // If eye cascade not loaded, return original
+        if (eyeCascade_.empty())
+            return faceImg;
+
+        // Convert to grayscale for eye detection
+        cv::Mat gray;
+        cv::cvtColor(faceImg, gray, cv::COLOR_BGR2GRAY);
+
+        // Detect eyes in the face crop
+        std::vector<cv::Rect> eyes;
+        eyeCascade_.detectMultiScale(gray, eyes, 1.1, 3, 0, cv::Size(10, 10));
+
+        // Need at least 2 eyes for alignment
+        if (eyes.size() < 2)
+            return faceImg;
+
+        // Find the two leftmost eyes (we want left and right eye centers)
+        // Sort by x coordinate
+        std::sort(eyes.begin(), eyes.end(),
+                  [](const cv::Rect& a, const cv::Rect& b) { return a.x < b.x; });
+
+        cv::Point leftEye(eyes[0].x + eyes[0].width / 2, eyes[0].y + eyes[0].height / 2);
+        cv::Point rightEye(eyes[1].x + eyes[1].width / 2, eyes[1].y + eyes[1].height / 2);
+
+        // Calculate the angle between the eyes
+        double dx = static_cast<double>(rightEye.x - leftEye.x);
+        double dy = static_cast<double>(rightEye.y - leftEye.y);
+        double angle = std::atan2(dy, dx) * 180.0 / CV_PI;
+
+        // Desired: eyes should be perfectly horizontal (angle = 0)
+        // If angle is already near 0, skip alignment
+        if (std::abs(angle) < 2.0)
+            return faceImg;
+
+        // Compute the center point between the eyes
+        cv::Point center((leftEye.x + rightEye.x) / 2, (leftEye.y + rightEye.y) / 2);
+
+        // Get the rotation matrix to align eyes horizontally
+        cv::Mat rotMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
+
+        // Warp the face image to align eyes horizontally
+        cv::Mat aligned;
+        cv::warpAffine(faceImg, aligned, rotMatrix, faceImg.size(),
+                       cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+
+        return aligned;
+    }
+
     std::vector<float> ModelsHandler::getEmbedding(const cv::Mat& faceImg)
     {
-        torch::Tensor tensor = preprocessForRecognition(faceImg);
+        // First align the face to normalize head rotation
+        cv::Mat alignedFace = alignFace(faceImg);
+        torch::Tensor tensor = preprocessForRecognition(alignedFace);
         torch::Tensor output = recognizer_.forward({tensor}).toTensor();
 
         // Move output to CPU and extract as vector
@@ -177,6 +240,26 @@ namespace Recognition {
         faceRect = faces[largestIdx];
         cv::Mat faceCrop = frame(faceRect).clone();
         return getEmbedding(faceCrop);
+    }
+
+    void ModelsHandler::detectAndEmbedAll(const cv::Mat& frame,
+                                           std::vector<cv::Rect>& faceRects,
+                                           std::vector<std::vector<float>>& embeddings,
+                                           float minConfidence)
+    {
+        faceRects = detectFaces(frame, minConfidence);
+        embeddings.clear();
+        embeddings.reserve(faceRects.size());
+
+        for (const auto& rect : faceRects)
+        {
+            cv::Mat faceCrop = frame(rect).clone();
+            std::vector<float> emb = getEmbedding(faceCrop);
+            embeddings.push_back(emb);
+        }
+
+        std::cout << "[ModelsHandler] Detected " << faceRects.size()
+                  << " faces and computed embeddings." << std::endl;
     }
 
 } // namespace Recognition
