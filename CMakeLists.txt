@@ -1,14 +1,22 @@
 cmake_minimum_required(VERSION 3.20)
 project(BiometricAuthentication)
 
-set(TORCH_CUDA_ARCH_LIST "7.5")
-set(CAFFE2_USE_CUDNN 9)
-set(OpenCV_ROOT "${VCPKG_INSTALLED_DIR}/x64-linux/share/opencv4")
+
+
+set(CMAKE_CXX_STANDARD 17)
+
+set(CMAKE_TOOLCHAIN_FILE "C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain")
+
+
+if(MSVC)
+    add_compile_options(/utf-8 /Zc:__cplusplus)
+endif()
+
+
 
 find_package(OpenCV CONFIG REQUIRED)
 
-set(CMAKE_CXX_STANDARD 20)
-
+set(OpenCV_ROOT "${VCPKG_INSTALLED_DIR}/x64-windows/share/opencv4")
 add_executable(BiometricAuthentication
         external/third_party/doctest.cpp
         external/third_party/doctest.hpp
@@ -36,35 +44,21 @@ target_include_directories(BiometricAuthentication PRIVATE
         ${PROJECT_SOURCE_DIR}/include
 )
 
-add_definitions(-DMODELS_DIR="${CMAKE_SOURCE_DIR}/models")
-
+target_compile_definitions(BiometricAuthentication PRIVATE
+    MODELS_DIR="${CMAKE_SOURCE_DIR}/models"
+)
 
 target_link_libraries(BiometricAuthentication PRIVATE
 
-        -Wl,--no-as-needed
-        -Wl,--whole-archive
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch_cuda.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch_cpu.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch.so"
-        -Wl,--no-whole-archive
 
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libc10_cuda.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libc10.so"
 
-        # 1. CUDA Runtime (from your toolkit)
-        "/usr/local/cuda/lib64/libcudart.so"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/torch.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/torch_cpu.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/c10.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/fmt.lib"
 
-        # 2. CUDA Driver (The one usually missing - found in system libs)
-        "/usr/lib/x86_64-linux-gnu/libcuda.so.1"
-
-        # 3. NVRTC (Compiler library)
-        "/usr/local/cuda/lib64/libnvrtc.so"
 
         ${OpenCV_LIBS}
-
-        pthread
-        dl
-        m
 )
 
 # Standalone application (no test framework - runs the face recognition app directly)
@@ -87,32 +81,30 @@ target_include_directories(biometric-auth-app PRIVATE
         ${PROJECT_SOURCE_DIR}/include
 )
 
-add_definitions(-DMODELS_DIR="${CMAKE_SOURCE_DIR}/models")
+target_compile_definitions(biometric-auth-app PRIVATE
+    MODELS_DIR="${CMAKE_SOURCE_DIR}/models"
+)
 
 target_link_libraries(biometric-auth-app PRIVATE
-        -Wl,--no-as-needed
-        -Wl,--whole-archive
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch_cuda.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch_cpu.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libtorch.so"
-        -Wl,--no-whole-archive
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libc10_cuda.so"
-        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/libc10.so"
-        "/usr/local/cuda/lib64/libcudart.so"
-        "/usr/lib/x86_64-linux-gnu/libcuda.so.1"
-        "/usr/local/cuda/lib64/libnvrtc.so"
+
+
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/torch.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/torch_cpu.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/c10.lib"
+        "${CMAKE_SOURCE_DIR}/external/libtorch/lib/fmt.lib"
+
+
         ${OpenCV_LIBS}
-        pthread dl m
 )
 
-target_compile_options(biometric-auth-app PRIVATE -O3 -Wall)
-set_target_properties(biometric-auth-app PROPERTIES
-        INSTALL_RPATH "${CMAKE_SOURCE_DIR}/external/libtorch/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-)
+#target_compile_options(biometric-auth-app PRIVATE -O3 -Wall)
+#set_target_properties(biometric-auth-app PROPERTIES
+  #      INSTALL_RPATH "${CMAKE_SOURCE_DIR}/external/libtorch/lib"
+ #       BUILD_WITH_INSTALL_RPATH TRUE
+#)
 
-target_compile_options(BiometricAuthentication PRIVATE -O3 -Wall)
-set_target_properties(BiometricAuthentication PROPERTIES
-        INSTALL_RPATH "${CMAKE_SOURCE_DIR}/external/libtorch/lib"
-        BUILD_WITH_INSTALL_RPATH TRUE
-)
+#target_compile_options(BiometricAuthentication PRIVATE -O3 -Wall)
+#set_target_properties(BiometricAuthentication PROPERTIES
+#        INSTALL_RPATH "${CMAKE_SOURCE_DIR}/external/libtorch/lib"
+#        BUILD_WITH_INSTALL_RPATH TRUE
+#)

@@ -9,8 +9,8 @@ import onnx
 from onnx2torch import convert
 
 # Paths
-ONNX_PATH = "/home/moinshaikh/CLionProjects/BiometricAuthentication/models/model.onnx"
-OUTPUT_PATH = "/home/moinshaikh/CLionProjects/BiometricAuthentication/models/model.torchscript.pt"
+ONNX_PATH = "C:/Users/Moin Shaikh/Desktop/project/BiometricAuthentication/models/model.onnx"
+OUTPUT_PATH = "C:/Users/Moin Shaikh/Desktop/project/BiometricAuthentication/models/model.torchscript.pt"
 
 # Always trace on CPU for maximum compatibility.
 # The saved TorchScript model can be moved to CUDA at load time via model.to(torch::kCUDA).
@@ -22,8 +22,10 @@ onnx_model = onnx.load(ONNX_PATH)
 print("ONNX model loaded successfully.")
 
 # 2. Convert ONNX -> PyTorch (stays on CPU)
+# Pass the already-loaded ModelProto object to avoid
+# PermissionError on Windows temp files inside safe_shape_inference.
 print("Converting ONNX to PyTorch using onnx2torch...")
-torch_model = convert(ONNX_PATH)
+torch_model = convert(onnx_model)
 torch_model.eval()
 print("Conversion to PyTorch complete.")
 

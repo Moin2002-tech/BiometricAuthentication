@@ -103,7 +103,7 @@ namespace Recognition {
 
         // Face alignment: eye cascade for rotation normalization
         cv::CascadeClassifier eyeCascade_;
-        static constexpr const char* EYE_CASCADE_PATH = "/usr/share/opencv4/haarcascades/haarcascade_eye.xml";
+        static constexpr const char* EYE_CASCADE_PATH = MODELS_DIR "/haarcascade_eye.xml";
 
         // Preprocessing helpers
         cv::Mat preprocessForDetection(const cv::Mat& frame) const;

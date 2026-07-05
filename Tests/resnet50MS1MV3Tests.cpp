@@ -19,7 +19,7 @@ TEST_SUITE("ArcFace MS1MV3 Backbone Tests") {
     const std::string TORCHSCRIPT_PATH = std::string(MODELS_DIR) + "/model.torchscript.pt";
     const std::string ONNX_PATH = std::string(MODELS_DIR) + "/model.onnx";
 
-    // ------------- TorchScript helpers -------------
+
 
     torch::jit::Module load_torchscript_model() {
         torch::jit::Module model = torch::jit::load(TORCHSCRIPT_PATH);
@@ -27,7 +27,7 @@ TEST_SUITE("ArcFace MS1MV3 Backbone Tests") {
         return model;
     }
 
-    // ------------- OpenCV DNN ONNX helpers -------------
+
 
     cv::dnn::Net load_onnx_model() {
         cv::dnn::Net net = cv::dnn::readNetFromONNX(ONNX_PATH);
