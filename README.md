@@ -1,3 +1,4 @@
+
 # BiometricAuthentication
 
 A C++ biometric authentication system for face recognition using deep learning models.
@@ -109,7 +110,7 @@ BiometricAuthentication/
 - CMake 3.16+
 - OpenCV 4.x
 - ONNX Runtime (for ONNX model inference)
-- LibTorch / PyTorch C++ API (optional, for PyTorch model loading)
+- LibTorch / PyTorch C++ API (optional, for PyTorch model loading) https://download.pytorch.org/libtorch/cpu/libtorch-win-shared-with-deps-2.12.1%2Bcpu.zip
 - C++17 compatible compiler
 
 ## Features
